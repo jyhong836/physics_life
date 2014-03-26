@@ -1,0 +1,153 @@
+function [ cellsout ] = updatecells( cells, w, h, k )
+%更新元胞自动机version1.1.02
+%   v1.1.02
+%   HPP粒子碰撞细胞粒子会有一定的几率带走一个原子，但不对边界点处理，这个
+%   几率等于(碰撞粒子质量减去被撞的种类除以128。即粒子质量越大，带走粒子的可能性越大。
+%   v1.1.0
+%   处理移动的占据方块
+%   k(6):保存的不再是方向，而是细胞左上角位置，编码方式:=x+w*(y-1);解码方
+%   式：y=floor(double(code)/w))+1,x=code-w*(y-1);但是一般用不到解码。
+%   中心位置的计算使用mean(x)和mean(y)得到。对同一细胞内的细胞格点和HPP格
+%   点都把k(6)标记为相同的pos_code。
+%   
+%   v1.0
+%   k:=6
+%   1~4:四个方向，如果有HPP粒子进入，则表示HPP粒子的编码，当且仅当为0时
+%   表示该方向没有粒子
+%   5:如果该格点被非HPP粒子占据，则保存占据粒子的编码（为负数），没有点
+%   则为0，没有非HPP占据的情况，记录HPP粒子的数量（最大是4）。
+%   6:在5不为0的情况下，保存占据粒子的信息，目前包含的是方向，如果为0表
+%   示不移动。
+%   
+%   已经处理边界，边界只有在格点是占据点的时候才进行检查
+%   已经处理占据格点对HPP粒子的反弹。
+
+walls_code=-1;
+
+if k<6
+    disp('error:k<6');
+    return
+end
+cellsout=zeros(w,h,k);
+% x=2:w-1;
+% y=2:h-1;
+for x=2:w-1
+    for y=2:h-1
+        %% 如果是HPP格点或空格点
+        if cells(x,y,5)>=0
+            %% 左右相碰
+            if cells(x,y,1)>0 && cells(x,y,3)>0 && cells(x,y,2)==0 && cells(x,y,4)==0
+                cellsout(x,y+1,4)=cells(x,y,1);
+                cellsout(x,y-1,2)=cells(x,y,3);
+                cellsout(x,y,5)=2;
+                cellsout(x,y,6)=cells(x,y,6);
+                continue
+            end
+            %% 上下相碰
+            if cells(x,y,2)>0 && cells(x,y,4)>0 && cells(x,y,1)==0 && cells(x,y,3)==0
+                cellsout(x+1,y,1)=cells(x,y,2);
+                cellsout(x-1,y,3)=cells(x,y,4);
+                cellsout(x,y,5)=2;
+                cellsout(x,y,6)=cells(x,y,6);
+                continue
+            end
+            %% 自由前进
+            for i=1:4
+                if cells(x,y,i)>0
+                    if mod(i,2)==0 % 2 or 4
+                        cellsout(x,y-3+i,i)=cells(x,y,i);
+                    else % 1 or 3
+                        cellsout(x+2-i,y,i)=cells(x,y,i);
+                    end
+                    cellsout(x,y,5)=cellsout(x,y,5)+1;
+                end
+            end
+            cellsout(x,y,6)=cells(x,y,6);
+        else
+            %% 细胞格点
+            % 不移动
+            cellsout(x,y,5:6)=cells(x,y,5:6);
+            if cells(x,y,1)>0
+                if rand<(cells(x,y,1)+cells(x,y,5))/128
+                    cellsout(x,y,5)=cellsout(x,y,5)+1;
+                    cellsout(x-1,y,3)=cells(x,y,1)+1;
+                else
+                    cellsout(x-1,y,3)=cells(x,y,1);
+                end
+            end
+            if cells(x,y,2)>0
+                if cellsout(x,y,5)<0 && rand<(cells(x,y,2)+cells(x,y,5))/128
+                    cellsout(x,y,5)=cellsout(x,y,5)+1;
+                    cellsout(x,y+1,4)=cells(x,y,2)+1;
+                else
+                    cellsout(x,y+1,4)=cells(x,y,2);
+                end
+            end
+            if cells(x,y,3)>0
+                if cellsout(x,y,5)<0 && rand<(cells(x,y,3)+cells(x,y,5))/128
+                    cellsout(x,y,5)=cellsout(x,y,5)+1;
+                    cellsout(x+1,y,1)=cells(x,y,3)+1;
+                else
+                    cellsout(x+1,y,1)=cells(x,y,3);
+                end
+            end
+            if cells(x,y,4)>0
+                if cellsout(x,y,5)<0 && rand<(cells(x,y,3)+cells(x,y,5))/128
+                    cellsout(x,y,5)=cellsout(x,y,5)+1;
+                    cellsout(x,y-1,2)=cells(x,y,4)+1;
+                else
+                    cellsout(x,y-1,2)=cells(x,y,4);
+                end
+            end
+            if cellsout(x,y,5)==0
+                cellsout(x,y,6)=0;
+            end
+        end
+    end
+end
+
+%% 左右边界
+for x=[1 w]
+    for y=1:h
+        if cells(x,y,5)<0
+            %% 占据格点
+            if cells(x,y,1)>0
+                cellsout(x-1,y,3)=cells(x,y,1);
+            end
+            if cells(x,y,2)>0
+                cellsout(x,y+1,4)=cells(x,y,2);
+            end
+            if cells(x,y,3)>0
+                cellsout(x+1,y,1)=cells(x,y,3);
+            end
+            if cells(x,y,4)>0
+                cellsout(x,y-1,2)=cells(x,y,4);
+            end
+            cellsout(x,y,5:6)=cells(x,y,5:6);
+        end
+    end
+end
+
+%% 上下边界
+for x=1:w
+    for y=[1 h]
+        if cells(x,y,5)<0
+            %% 占据格点
+            if cells(x,y,1)>0
+                cellsout(x-1,y,3)=cells(x,y,1);
+            end
+            if cells(x,y,2)>0
+                cellsout(x,y+1,4)=cells(x,y,2);
+            end
+            if cells(x,y,3)>0
+                cellsout(x+1,y,1)=cells(x,y,3);
+            end
+            if cells(x,y,4)>0
+                cellsout(x,y-1,2)=cells(x,y,4);
+            end
+            cellsout(x,y,5:6)=cells(x,y,5:6);
+        end
+    end
+end
+end
+
